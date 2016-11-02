@@ -2,12 +2,10 @@ PepScan version 0.1
 
 PepScan pipeline is a fully automated and modular software package designed for protein quantification and the identification of peptides from mass spectra data. It works on LSF job scheduler. 
 
-Usage: perl PepScan.pl data_dir mgf_dir output_dir mass_type step_number
+Usage: perl PepScan.pl data_dir output_dir step_number
 
 
-Example: perl PepScan.pl /gscmnt/gc2706/info/medseq/cptac/breast/ /gscmnt/gc2706/info/medseq/cptac/breast/ /gscmnt/gc2706/info/medseq/cptac/breast/output 1 1
-
-type_mass = 0, 1 for phosphoproteome and proteome, respectively. 
+Example: perl PepScan.pl /gscuser/scao/gc2521/dinglab/cptac/test_pepscan /gscuser/scao/gc2521/dinglab/cptac/test_pepscan/results 3
 
 step_number: Run this pipeline step by step. (Running all steps if step number is 0)
 

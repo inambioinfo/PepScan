@@ -1,6 +1,7 @@
 # PepScan Pipeline
 # Song Cao, Ding Lab
 # scao@genome.wustl.edu 
+### updated on Nov 2, 2016 ###
 
 my $version = 1.2;
 my $red = "\e[31m";
@@ -10,15 +11,15 @@ my $green = "\e[32m";
 my $purple = "\e[35m";
 my $cyan = "\e[36m";
 my $normal = "\e[0m"; 
+
 (my $usage = <<OUT) =~ s/\t+//g;
 This script will run the piptide identification pipeline on LSF cluster.
 Pipeline version: $version
-$yellow		Usage: perl $0 <run_folder> <run_dir_mgf> <run_dir_out> <type_mass> <step_number> $normal
-<run_folder> = full path of the folder holding files of mzml and vcf file
-<run_folder> = full path of the folder holding the mgf file
+$yellow		Usage: perl $0 <run_dir_in> <run_dir_out> <step_number> $normal
+<run_dir_in> = full path of the folder holding files of mzml, mgf and vcf files
 <run_dir_out> = full path of the folder which outputs the protein expresion and peptides variants 
-<type_mass> = 0, 1 for phosphoproteome and proteome, respectively. 
 <step_number> run this pipeline step by step. (running the whole pipeline if step number is 0)
+
 [1] Run Quilts for the annotation of snvs and in-house script for the annotation of indels
 [2] Create fasta DB for MSGF+
 [3] Run MSGF+ for one sample
@@ -27,23 +28,25 @@ $yellow		Usage: perl $0 <run_folder> <run_dir_mgf> <run_dir_out> <type_mass> <st
 [6] Extract reporter ion intensity
 [7] Get protein expression
 [8] Get the number of SAAVs, independent on mass type
+
 $normal
 OUT
 
-die $usage unless @ARGV == 5;
-my ( $run_dir,$run_dir_mgf, $run_dir_out, $type_mass,$step_number ) = @ARGV;
+die $usage unless @ARGV == 3;
+my ( $run_dir_in, $run_dir_out,$step_number ) = @ARGV;
 if ($run_dir =~/(.+)\/$/) {
 	$run_dir = $1;
 }
 
+my $type_mass=1; 
 die $usage unless ((($step_number >=0)&&($step_number <= 8)));
 #####################################################################################
 # values need to be modified to adapt to local environment
-my $email = "scao\@genome.wustl.edu";
+my $email = "scao\@wustl.edu";
 #####################################################################################
 # everything else below should be automated
 my $HOME = $ENV{HOME};
-my $working_name= (split(/\//,$run_dir))[-1];
+my $working_name= (split(/\//,$run_dir_in))[-1];
 
 my $run_script_path = `dirname $0`;
 #my $run_script_path = `pwd`;
@@ -68,19 +71,20 @@ if (! -d $HOME."/LSF_DIR") {
 my $lsf_file_dir = $HOME."/LSF_DIR";
 my $mod_msgf; 
 
-if($type_mass==0) { $mod_msgf="/gscmnt/gc2108/info/medseq/proteogenomics/analyses/pipeline_step_1_peptides_detection/cptac/breast/MSGF+_modifications/MSGFDB_CompRef_Phospho_iTRAQ_20ppm.txt"; }
-if($type_mass==1) { $mod_msgf="/gscmnt/gc2108/info/medseq/proteogenomics/analyses/pipeline_step_1_peptides_detection/cptac/breast/MSGF+_modifications/MSGFDB_CompRef_iTRAQ_20ppm.txt"; }
+#if($type_mass==0) { $mod_msgf="MSGFDB_CompRef_Phospho_iTRAQ_20ppm.txt"; }
+if($type_mass==1) { $mod_msgf="MSGFDB_CompRef_iTRAQ_20ppm.txt"; }
 # obtain script path
 
 my $run_script_path = `dirname $0`;
 chomp $run_script_path;
 $run_script_path = "/usr/bin/perl ".$run_script_path."/";
-my $MSGFPLUS="/gscmnt/gc2108/info/medseq/proteogenomics/analyses/pipeline_step_1_peptides_detection/MSGF+/bin/MSGFPlus.jar";
+my $MSGFPLUS="./bin/MSGFPlus.jar";
 my $QUILTS1="./quilts-WU/v1.0/run_quilts_tophat.pl"; 
 my $reporter="reporter_intensity.pl"; 
 my $IonSR="mgf_select_reporter_ions_only.pl";
 my $Rindel="protein_seq_for_indel_using_bed.pl";
-my $PBED="/gscuser/scao/gc2108/info/medseq/proteogenomics/databases/refseq_human_20130727_proteome/proteome.bed";
+
+my $PBED="proteome.bed";
 
 my $current_job_file = "no";#cannot be empty
 my $hold_job_file = "";
@@ -91,42 +95,41 @@ my $msgf_fasta;
 my $job_name="";
 my $run_dir_msgf; 
 my $run_dir_quilts;
-#my $run_dir_mgf; 
-#my $run_dir_out="/gscmnt/gc3027/info/medseq/proteomics/cptac/breast/proteindata"; 
+my $run_dir_mgf; 
 
-$run_dir_quilts=$run_dir."/quilts"; 
+$run_dir_quilts=$run_dir_in."/quilts"; 
 
-$run_dir_indel=$run_dir."/indel";
+$run_dir_indel=$run_dir_in."/indel";
 
 if(!(-d $run_dir_quilts)) { print "no quilts directory\n"; exit(2);  }
 if(!(-d $run_dir_indel))  { print "no indel directory\n"; exit(2); }
 
-if($type_mass==0) { $run_dir_msgf=$run_dir."/phosphoproteome"; }
+if($type_mass==0) { $run_dir_msgf=$run_dir_in."/phosphoproteome"; }
 else { 
-     if($type_mass==1) { $run_dir_msgf=$run_dir."/proteome"; }
+     if($type_mass==1) { $run_dir_msgf=$run_dir_in."/proteome"; }
      else { die $usage; }
      }
 
-if($type_mass==0) { $run_dir_mgf=$run_dir_mgf."/phosphoproteome"; }
+if($type_mass==0) { $run_dir_mgf=$run_dir_in."/phosphoproteome"; }
 else {
-     if($type_mass==1) { $run_dir_mgf=$run_dir_mgf."/proteome"; }
+     if($type_mass==1) { $run_dir_mgf=$run_dir_in."/proteome"; }
      else { die $usage; }
      }
 
-opendir(DH, $run_dir_quilts) or die "Cannot open dir quilts $run_dir: $!\n";
+opendir(DH, $run_dir_quilts) or die "Cannot open dir quilts $run_dir_in: $!\n";
 my @sample_dir_list_quilts = readdir DH;
 close DH;
 
-opendir(DH, $run_dir_indel) or die "Cannot open dir indel $run_dir: $!\n";
+opendir(DH, $run_dir_indel) or die "Cannot open dir indel $run_dir_in: $!\n";
 my @sample_dir_list_indel = readdir DH;
 close DH;
 
-opendir(DH, $run_dir_msgf) or die "Cannot open dir msgf $run_dir: $!\n";
+opendir(DH, $run_dir_msgf) or die "Cannot open dir msgf $run_dir_in: $!\n";
 my @sample_dir_list_msgf = readdir DH;
 close DH;
 
 
-opendir(DH, $run_dir_mgf) or die "Cannot open dir mgf $run_dir_mgf: $!\n";
+opendir(DH, $run_dir_mgf) or die "Cannot open dir mgf $run_dir_mgf_in: $!\n";
 my @sample_dir_list_mgf = readdir DH;
 close DH;
 
@@ -170,7 +173,6 @@ if ($step_number < 16) {
                                  }
                          }
                  }
-			
 		}
 
        if($step_number==0 || $step_number == 2)
@@ -181,7 +183,7 @@ if ($step_number < 16) {
                 if (!($sample_name =~ /\./)) {
                         $sample_full_path = $run_dir_msgf."/".$sample_name;
                         print $sample_full_path,"\n";
-			$job_name=$sample_name; 
+						$job_name=$sample_name; 
                         if (-d $sample_full_path)
                         {
                            	$msgf_fasta=$run_dir_msgf."/".$sample_name."/".$sample_name.".fasta";
@@ -189,8 +191,8 @@ if ($step_number < 16) {
                                         &submit_job_array_db(1);
                                                                 }
                                         }
-		 }
-          }
+		 		}
+         	}
 	
 	if($step_number==0 || $step_number == 3)
 	{
@@ -208,15 +210,15 @@ if ($step_number < 16) {
 
        			   foreach my $gz_file_name (@sample_mzmlgz)
 				     {
-                                     	if (($gz_file_name =~ /\.mzML\.gz$/ || $gz_file_name =~ /\.mzML$/)) 
-					 {
-     				    	  $gz_file_name=~s/\.gz$//g;
-				    	  $job_name=$gz_file_name; 
-                                    	  $sample_full_name=$run_dir_msgf."/".$sample_name."/".$gz_file_name; 
+                         if (($gz_file_name =~ /\.mzML\.gz$/ || $gz_file_name =~ /\.mzML$/)) 
+					 		{
+     				    	  	$gz_file_name=~s/\.gz$//g;
+				    	  		$job_name=$gz_file_name; 
+                                $sample_full_name=$run_dir_msgf."/".$sample_name."/".$gz_file_name; 
 					#$msgf_fasta=$run_dir_msgf."/".$sample_name."/".$sample_name.".fasta"; 
-				    	  print $cyan, "\nSubmitting jobs for initial msgf run: sample ",$sample_full_name, "...",$normal, "\n";
-					  &submit_job_single_init_msgf(1,$sample_full_name);
-					  last;  
+				    	  		print $cyan, "\nSubmitting jobs for initial msgf run: sample ",$sample_full_name, "...",$normal, "\n";
+					  			&submit_job_single_init_msgf(1,$sample_full_name);
+					  			last;  
                                           }
 					}
 				      }
@@ -610,7 +612,7 @@ sub submit_job_protein_expression{
        # print PRO "#BSUB -J $current_job_file\n";
         #print PRO "#BSUB -o $lsf_file_dir","/","$current_job_file.out\n";
         #print PRO "#BSUB -e $lsf_file_dir","/","$current_job_file.err\n";
-        #print PRO "         ".$run_script_path."phosphoprotein_expression_v1.pl $run_dir_msgf $run_dir_mgf $run_dir_out\n";
+        #print PRO "         ".$run_script_path."phosphoprotein_expression_v1.pl $run_dir_msgf $run_dir_in $run_dir_out\n";
         #close PRO;
         #$bsub_com = "bsub < $job_files_dir/$current_job_file\n";
         #system ($bsub_com);
